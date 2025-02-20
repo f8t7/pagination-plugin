@@ -1,134 +1,149 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, MarkdownView, Editor } from 'obsidian';
+import {
+  EditorView,
+  Decoration,
+  DecorationSet,
+  WidgetType,
+  ViewUpdate
+} from '@codemirror/view';
+import {
+  RangeSetBuilder,
+  StateField,
+  StateEffect
+} from '@codemirror/state';
 
-// Remember to rename these classes and interfaces!
+export default class PaginationPlugin extends Plugin {
+  async onload() {
+    // 注册装饰状态字段
+    this.registerEditorExtension([decorationField]);
 
-interface MyPluginSettings {
-	mySetting: string;
+    // 使用防抖来避免频繁计算
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', this.debounce(() => {
+        const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (markdownView) {
+          this.decorateView(markdownView.editor);
+        }
+      }, 100))
+    );
+  }
+
+  // 添加防抖函数
+  private debounce(func: Function, wait: number) {
+    let timeout: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+
+  onunload() {
+    // 插件卸载时的清理操作
+  }
+
+  decorateView(editor: Editor) {
+    try {
+      // @ts-expect-error
+      const editorView = editor.cm as EditorView;
+      if (!editorView) return;
+
+      const viewport = editorView.viewport;
+      const pageHeight = 800;
+      const maxPages = 50; // 限制最大页数
+
+      const builder = new RangeSetBuilder<Decoration>();
+      let currentPos = viewport.from; // 只处理可视区域
+      let pageNumber = 1;
+
+      // 添加安全检查
+      while (currentPos < viewport.to && pageNumber <= maxPages) {
+        try {
+          const blockInfo = editorView.lineBlockAt(currentPos);
+          let accHeight = 0;
+          let pos = currentPos;
+
+          while (pos < viewport.to) {
+            const block = editorView.lineBlockAt(pos);
+            if (accHeight + block.height > pageHeight) break;
+            accHeight += block.height;
+            pos = block.to;
+          }
+
+          const decoration = Decoration.widget({
+            widget: new PageBreakWidget(pageNumber),
+            side: 1,
+          });
+
+          builder.add(pos, pos, decoration);
+          currentPos = pos;
+          pageNumber++;
+
+        } catch (e) {
+          console.error('Error in pagination calculation:', e);
+          break;
+        }
+      }
+
+      const decorations = builder.finish();
+      editorView.dispatch({
+        effects: setDecorations.of(decorations)
+      });
+
+    } catch (e) {
+      console.error('Error in decorateView:', e);
+    }
+  }
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+class PageBreakWidget extends WidgetType {
+  constructor(private pageNumber: number) {
+    super();
+  }
+
+  toDOM() {
+    const div = document.createElement('div');
+    div.className = 'pagination-page-end';
+    div.setAttribute('data-page', `Page ${this.pageNumber}`);
+    return div;
+  }
+
+  eq(other: PageBreakWidget): boolean {
+    return this.pageNumber === other.pageNumber;
+  }
+
+  get estimatedHeight(): number {
+    return 24; // 估计的高度，单位为像素
+  }
+
+  get lineBreaks(): number {
+    return 1; // 分页符占用的行数
+  }
+
+  destroy() {
+    // 清理工作
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+// 定义装饰效果
+const setDecorations = StateEffect.define<DecorationSet>();
 
-	async onload() {
-		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
-
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
-}
+// 创建装饰状态字段
+const decorationField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(decorations, tr) {
+    decorations = decorations.map(tr.changes);
+    for (let effect of tr.effects) {
+      if (effect.is(setDecorations)) {
+        decorations = effect.value;
+      }
+    }
+    return decorations;
+  },
+  provide: field => EditorView.decorations.from(field)
+});

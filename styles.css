@@ -6,3 +6,68 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+/* 基础页面样式 */
+.cm-line {
+  position: relative;
+  z-index: 1;
+}
+
+/* 页面背景 */
+.pagination-page-end {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 800px; /* 固定页面高度 */
+  margin: 0;
+  z-index: 0;
+  background-color: rgba(200, 200, 200, 0.2);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1) inset;
+}
+
+/* 奇数页背景 */
+.pagination-page-end.page-odd {
+  background-color: rgba(var(--background-primary-rgb), 0.3);
+}
+
+/* 偶数页背景 */
+.pagination-page-end.page-even {
+  background-color: rgba(var(--background-secondary-rgb), 0.2);
+}
+
+/* 页码样式 */
+.pagination-page-end::after {
+  content: attr(data-page);
+  position: absolute;
+  right: 20px;
+  bottom: 10px;
+  color: var(--text-muted);
+  font-size: 0.8em;
+  font-style: italic;
+  padding: 4px 10px;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 页面分隔线 */
+.pagination-page-end::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--text-muted),
+    transparent
+  );
+  opacity: 0.2;
+}
+
+/* 页面阴影效果 */
+.pagination-page-end {
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05) inset;
+}
