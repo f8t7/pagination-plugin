@@ -13,7 +13,7 @@ function Editor({ value, onChange }) {
     if (!editorRef.current) return;
 
     const state = EditorState.create({
-      doc: value,
+      doc: value || '',
       extensions: [
         markdown(),
         oneDark,
@@ -33,12 +33,12 @@ function Editor({ value, onChange }) {
     viewRef.current = view;
 
     return () => view.destroy();
-  }, [editorRef]);
+  }, [editorRef, value]);
 
   useEffect(() => {
     if (viewRef.current && value !== viewRef.current.state.doc.toString()) {
       viewRef.current.dispatch({
-        changes: { from: 0, to: viewRef.current.state.doc.length, insert: value },
+        changes: { from: 0, to: viewRef.current.state.doc.length, insert: value || '' },
       });
     }
   }, [value]);

@@ -31,5 +31,10 @@ export default defineConfig({
     },
     // 禁用 public 目录的根路径影响
     publicDir: false
+  },
+  css: {
+    // 确保 CSS 输出路径与 assets 一致
+    outputStyle: 'expanded',
+    modules: false
   }
 });
